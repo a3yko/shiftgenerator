@@ -1,40 +1,38 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8"/>
-<title>Random Schedule Generator</title>
+<meta charset="utf-8">
+<title>Multi-Shift Schedule Generator</title>
 <style>
 body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;max-width:1100px;margin:24px auto;padding:0 18px;color:#111}
 h1{margin-bottom:6px}
 label{display:block;margin:8px 0 4px;font-weight:600}
-textarea,input,button{font-size:14px;padding:8px;border:1px solid #ccc;border-radius:6px}
+textarea,input,button{font-size:14px;padding:6px 8px;border:1px solid #ccc;border-radius:6px}
 .days{margin:4px 0 6px}
 .person{border:1px solid #ddd;border-radius:6px;padding:8px;margin-top:6px}
-button.small{font-size:13px;padding:6px 10px;margin-right:6px}
+button.small{font-size:13px;padding:6px 10px;margin:4px 4px 4px 0}
 table{border-collapse:collapse;width:100%;margin-top:14px}
 th,td{border:1px solid #ddd;padding:6px;text-align:left}
+.shift{display:flex;gap:6px;margin-bottom:6px;align-items:center}
 </style>
 </head>
 <body>
-<h1>Random Schedule Generator</h1>
+<h1>Random Multi-Shift Schedule Generator</h1>
 
-<label>Names (comma or one per line)</label>
+<label>Names (comma or line separated)</label>
 <textarea id="names" rows="4" placeholder="Alice, Bob, Charlie"></textarea>
-
-<div>
-  <button id="makePeople" class="small">Create People Entries</button>
-</div>
-
+<button id="makePeople" class="small">Create People Entries</button>
 <div id="peopleArea"></div>
+
+<h3>Shifts per Day</h3>
+<div id="shiftArea"></div>
+<button id="addShift" class="small">Add Shift</button>
 
 <label style="margin-top:12px">Start Date</label>
 <input type="date" id="start">
 
 <label>Days to Generate (e.g. 7 or 30)</label>
 <input type="number" id="numDays" value="7" min="1">
-
-<label>Slots per Day</label>
-<input type="number" id="slots" value="1" min="1">
 
 <div style="margin-top:8px">
   <button id="generate" class="small">Generate Schedule</button>
@@ -44,16 +42,32 @@ th,td{border:1px solid #ddd;padding:6px;text-align:left}
 <div id="output"></div>
 
 <script>
-const weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const weekdays=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
-// Build person list
-document.getElementById('makePeople').onclick = () => {
-  const raw = document.getElementById('names').value.trim();
+// --- Add/remove shifts ---
+function renderShiftRow(name='',start='',end=''){
+  const div=document.createElement('div');
+  div.className='shift';
+  div.innerHTML=`<label>Shift</label>
+  <input value="${name}" placeholder="Name" style="width:100px">
+  <label>Start</label><input type="time" value="${start}">
+  <label>End</label><input type="time" value="${end}">
+  <button class="small remove">✖</button>`;
+  div.querySelector('.remove').onclick=()=>div.remove();
+  return div;
+}
+document.getElementById('addShift').onclick=()=>{
+  document.getElementById('shiftArea').appendChild(renderShiftRow());
+};
+
+// --- Build people list ---
+document.getElementById('makePeople').onclick=()=>{
+  const raw=document.getElementById('names').value.trim();
   if(!raw){alert('Enter some names first');return;}
-  const names = raw.split(/,|\n/).map(x=>x.trim()).filter(Boolean);
-  const area = document.getElementById('peopleArea');
-  area.innerHTML = '';
-  names.forEach((name,i)=>{
+  const names=raw.split(/,|\n/).map(x=>x.trim()).filter(Boolean);
+  const area=document.getElementById('peopleArea');
+  area.innerHTML='';
+  names.forEach(name=>{
     const div=document.createElement('div');
     div.className='person';
     div.innerHTML=`<strong>${name}</strong>`;
@@ -64,8 +78,7 @@ document.getElementById('makePeople').onclick = () => {
       lbl.style.marginRight='8px';
       const cb=document.createElement('input');
       cb.type='checkbox';cb.dataset.day=idx;
-      lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(' '+d));
+      lbl.appendChild(cb);lbl.appendChild(document.createTextNode(' '+d));
       daysDiv.appendChild(lbl);
     });
     div.appendChild(daysDiv);
@@ -73,21 +86,29 @@ document.getElementById('makePeople').onclick = () => {
   });
 };
 
-// Helper random
+// --- Utility ---
 function rand(arr){return arr[Math.floor(Math.random()*arr.length)];}
 
-document.getElementById('generate').onclick = () => {
-  const start = new Date(document.getElementById('start').value);
-  const days = +document.getElementById('numDays').value;
-  const slots = +document.getElementById('slots').value;
+// --- Generate schedule ---
+document.getElementById('generate').onclick=()=>{
+  const start=new Date(document.getElementById('start').value);
+  const days=+document.getElementById('numDays').value;
   if(isNaN(start)){alert('Pick a start date');return;}
-  const peopleEls = document.querySelectorAll('.person');
-  if(!peopleEls.length){alert('Add people first');return;}
 
-  // Read people + days off
-  const people = Array.from(peopleEls).map(div=>{
-    const name=div.querySelector('strong').textContent;
-    const off=[...div.querySelectorAll('input:checked')].map(cb=>+cb.dataset.day);
+  // shifts
+  const shiftEls=document.querySelectorAll('#shiftArea .shift');
+  if(!shiftEls.length){alert('Add at least one shift');return;}
+  const shifts=[...shiftEls].map(div=>{
+    const [nameInp, startInp, endInp]=div.querySelectorAll('input');
+    return {name:nameInp.value||'Shift', start:startInp.value, end:endInp.value};
+  });
+
+  // people + days off
+  const personEls=document.querySelectorAll('.person');
+  if(!personEls.length){alert('Add people first');return;}
+  const people=[...personEls].map(p=>{
+    const name=p.querySelector('strong').textContent;
+    const off=[...p.querySelectorAll('input:checked')].map(cb=>+cb.dataset.day);
     return {name,off};
   });
 
@@ -96,47 +117,49 @@ document.getElementById('generate').onclick = () => {
   for(let i=0;i<days;i++){
     const date=new Date(start);date.setDate(start.getDate()+i);
     const weekday=(date.getDay()+6)%7; // Mon=0
-    const available=people.filter(p=>!p.off.includes(weekday));
-    const names=[];
-    const pool=[...available];
-    while(names.length<slots && pool.length){
-      // pick among least used
+    shifts.forEach(shift=>{
+      const available=people.filter(p=>!p.off.includes(weekday));
+      const pool=[...available];
+      if(!pool.length){schedule.push({date,weekday,shift,assigned:null});return;}
+      // choose least used, then random
       const min=Math.min(...pool.map(p=>counts[p.name]));
       const candidates=pool.filter(p=>counts[p.name]===min);
       const choice=rand(candidates);
-      names.push(choice.name);
       counts[choice.name]++;
-      pool.splice(pool.indexOf(choice),1);
-    }
-    schedule.push({date,weekday,names});
+      schedule.push({date,weekday,shift,assigned:choice.name});
+    });
   }
 
-  // Render
+  // --- Render output table ---
   const out=document.getElementById('output');
   out.innerHTML='<h3>Schedule</h3>';
   const tbl=document.createElement('table');
-  tbl.innerHTML='<tr><th>Date</th><th>Day</th><th>Assignments</th></tr>';
+  tbl.innerHTML='<tr><th>Date</th><th>Day</th><th>Shift</th><th>Time</th><th>Assigned</th></tr>';
   schedule.forEach(r=>{
     const tr=document.createElement('tr');
-    const dayStr=weekdays[r.weekday];
-    tr.innerHTML=`<td>${r.date.toISOString().slice(0,10)}</td><td>${dayStr}</td><td>${r.names.join(', ')||'(none available)'}</td>`;
+    tr.innerHTML=`<td>${r.date.toISOString().slice(0,10)}</td>
+      <td>${weekdays[r.weekday]}</td>
+      <td>${r.shift.name}</td>
+      <td>${r.shift.start}–${r.shift.end}</td>
+      <td>${r.assigned||'(none available)'}</td>`;
     tbl.appendChild(tr);
   });
   out.appendChild(tbl);
 };
 
-document.getElementById('csv').onclick = ()=>{
-  const rows=[['Date','Day','Assignments']];
+// --- Export CSV ---
+document.getElementById('csv').onclick=()=>{
+  const rows=[['Date','Day','Shift','Time','Assigned']];
   document.querySelectorAll('#output table tr:not(:first-child)').forEach(tr=>{
     const tds=tr.querySelectorAll('td');
-    rows.push([tds[0].textContent,tds[1].textContent,tds[2].textContent]);
+    rows.push([tds[0].textContent,tds[1].textContent,tds[2].textContent,tds[3].textContent,tds[4].textContent]);
   });
   if(rows.length===1){alert('No schedule yet');return;}
   const csv=rows.map(r=>r.map(x=>`"${x.replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download='schedule.csv';a.click();
+  a.href=url;a.download='multi_shift_schedule.csv';a.click();
   URL.revokeObjectURL(url);
 };
 </script>
